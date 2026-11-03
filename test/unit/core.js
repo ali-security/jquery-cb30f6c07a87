@@ -1103,6 +1103,35 @@ test("jQuery.extend(Object, Object)", function() {
 	deepEqual( options2, options2Copy, "Check if not modified: options2 must not be modified" );
 });
 
+test("jQuery.extend( true, ... ) Object.prototype pollution", function() {
+	expect( 1 );
+
+	jQuery.extend( true, {}, jQuery.parseJSON( "{\"__proto__\": {\"devMode\": true}}" ) );
+	ok( !( "devMode" in {} ), "Object.prototype not polluted" );
+
+	// Don't let a failure leak into the rest of the suite
+	delete Object.prototype.devMode;
+});
+
+test("jQuery.extend() skips __proto__ keys", function() {
+	expect( 4 );
+
+	var target, ret;
+
+	jQuery.extend( true, {}, { "nested": jQuery.parseJSON( "{\"__proto__\": {\"devModeNested\": true}}" ) } );
+	ok( !( "devModeNested" in {} ), "Object.prototype not polluted through a nested __proto__ key" );
+	delete Object.prototype.devModeNested;
+
+	jQuery.fn.extend( true, {}, jQuery.parseJSON( "{\"__proto__\": {\"devModeFn\": true}}" ) );
+	ok( !( "devModeFn" in {} ), "Object.prototype not polluted through jQuery.fn.extend" );
+	delete Object.prototype.devModeFn;
+
+	target = {};
+	ret = jQuery.extend( target, jQuery.parseJSON( "{\"__proto__\": {\"devModeShallow\": true}, \"a\": 1}" ) );
+	ok( !( "devModeShallow" in target ), "Shallow extend does not replace the target's prototype" );
+	strictEqual( ret.a, 1, "Other properties are still copied" );
+});
+
 test("jQuery.each(Object,Function)", function() {
 	expect( 23 );
 
