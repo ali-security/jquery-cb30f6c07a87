@@ -1562,8 +1562,8 @@ test( "animate should set display for disconnected nodes", function() {
 		$divTest = jQuery("<div>test</div>"),
 		// parentNode = null
 		$divEmpty = jQuery("<div/>"),
-		$divNone = jQuery("<div style='display: none;'/>"),
-		$divInline = jQuery("<div style='display: inline;'/>"),
+		$divNone = jQuery("<div style='display: none;'></div>"),
+		$divInline = jQuery("<div style='display: inline;'></div>"),
 		clock = this.clock;
 
 	strictEqual( $divTest.show()[ 0 ].style.display, "block", "set display with show() for element with parentNode = document fragment" );
@@ -2216,8 +2216,8 @@ test( "slideDown() after stop() (#13483)", 2, function() {
 
 test( "Respect display value on inline elements (#14824)", 2, function() {
 	var clock = this.clock,
-		fromStyleSheet = jQuery( "<span id='span-14824' />" ),
-		fromStyleAttr = jQuery( "<span style='display: block;' />" );
+		fromStyleSheet = jQuery( "<span id='span-14824'></span>" ),
+		fromStyleAttr = jQuery( "<span style='display: block;'></span>" );
 
 	jQuery( "#qunit-fixture" ).append( fromStyleSheet, fromStyleAttr );
 

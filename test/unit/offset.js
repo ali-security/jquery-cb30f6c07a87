@@ -532,7 +532,7 @@ test("offsetParent", function(){
 test("fractions (see #7730 and #7885)", function() {
 	expect(2);
 
-	jQuery("body").append("<div id='fractions'/>");
+	jQuery("body").append("<div id='fractions'></div>");
 
 	var result,
 		expected = { "top": 1000, "left": 1000 },

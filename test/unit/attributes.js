@@ -97,7 +97,7 @@ test( "attr(String)", function() {
 		"href": "#5"
 	}).appendTo("#qunit-fixture");
 	equal( jQuery("#tAnchor5").attr("href"), "#5", "Check for non-absolute href (an anchor)" );
-	jQuery("<a id='tAnchor6' href='#5' />").appendTo("#qunit-fixture");
+	jQuery("<a id='tAnchor6' href='#5'></a>").appendTo("#qunit-fixture");
 	equal( jQuery("#tAnchor5").prop("href"), jQuery("#tAnchor6").prop("href"), "Check for absolute href prop on an anchor" );
 
 	jQuery("<script type='jquery/test' src='#5' id='scriptSrc'></script>").appendTo("#qunit-fixture");
@@ -179,7 +179,7 @@ test( "attr(String) on cloned elements, #9646", function() {
 
 	strictEqual( input.clone( true ).attr( "name", "test" )[ 0 ].name, "test", "Name attribute should be changed on cloned element" );
 
-	div = jQuery("<div id='tester' />");
+	div = jQuery("<div id='tester'></div>");
 	div.attr("id");
 
 	strictEqual( div.clone( true ).attr( "id", "test" )[ 0 ].id, "test", "Id attribute should be changed on cloned element" );
@@ -953,7 +953,7 @@ var testVal = function( valueObj ) {
 	equal( document.getElementById("text1").value, "", "Check for modified (via val(null)) value of input element" );
 
 	var j,
-		$select = jQuery( "<select multiple><option value='1'/><option value='2'/></select>" ),
+		$select = jQuery( "<select multiple><option value='1'></option><option value='2'></option></select>" ),
 		$select1 = jQuery("#select1");
 
 	$select1.val( valueObj("3") );

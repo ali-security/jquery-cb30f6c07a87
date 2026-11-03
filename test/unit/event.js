@@ -1171,7 +1171,7 @@ test("trigger(eventObject, [data], [fn])", function() {
 	expect(28);
 
 	var event,
-		$parent = jQuery("<div id='par' />").appendTo("body"),
+		$parent = jQuery("<div id='par'></div>").appendTo("body"),
 		$child = jQuery("<p id='child'>foo</p>").appendTo( $parent );
 
 	$parent.get( 0 ).style.display = "none";
@@ -1441,7 +1441,7 @@ if ( window.onbeforeunload === null &&
 		var win,
 			forIE6 = 0,
 			fired = false,
-			iframe = jQuery("<iframe src='data/iframe.html' />");
+			iframe = jQuery("<iframe src='data/iframe.html'></iframe>");
 
 		iframe.appendTo("#qunit-fixture").one( "load", function() {
 			win = this.contentWindow || this.contentDocument;
@@ -1481,7 +1481,7 @@ if ( window.onbeforeunload === null &&
 
 			function checker() {
 				ok( true, "window.onbeforeunload handler is called" );
-				iframe = jQuery("<iframe src='data/iframe.html' />");
+				iframe = jQuery("<iframe src='data/iframe.html'></iframe>");
 
 				iframe.appendTo("#qunit-fixture").one( "load", function() {
 					win = iframe[ 0 ].contentWindow || iframe[ 0 ].contentDocument;

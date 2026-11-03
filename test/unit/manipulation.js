@@ -1237,7 +1237,7 @@ function testReplaceWith( val ) {
 
 
 	child = jQuery("#qunit-fixture").children().first();
-	$div = jQuery("<div class='pathological'/>").insertBefore( child );
+	$div = jQuery("<div class='pathological'></div>").insertBefore( child );
 	$div.replaceWith( $div );
 	deepEqual( jQuery( ".pathological", "#qunit-fixture" ).get(), $div.get(),
 		"Self-replacement" );
@@ -1615,7 +1615,7 @@ function testHtml( valueObj ) {
 		div = jQuery("<div></div>"),
 		fixture = jQuery("#qunit-fixture");
 
-	div.html( valueObj("<div id='parent_1'><div id='child_1'/></div><div id='parent_2'/>") );
+	div.html( valueObj("<div id='parent_1'><div id='child_1'></div></div><div id='parent_2'></div>") );
 	equal( div.children().length, 2, "Found children" );
 	equal( div.children().children().length, 1, "Found grandchild" );
 
@@ -2231,7 +2231,7 @@ test( "Guard against exceptions when clearing safeChildNodes", function() {
 	var div;
 
 	try {
-		div = jQuery("<div/><hr/><code/><b/>");
+		div = jQuery("<div></div><hr/><code></code><b></b>");
 	} catch(e) {}
 
 	ok( div && div.jquery, "Created nodes safely, guarded against exceptions on safeChildNodes[ -1 ]" );
@@ -2331,7 +2331,7 @@ test( "script evaluation (#11795)", function() {
 			"<script>ok( true, 'evaluated: inner no type' );</script>",
 		"</div>"
 	].join(""));
-	scriptsIn.appendTo( jQuery("<div class='detached'/>") );
+	scriptsIn.appendTo( jQuery("<div class='detached'></div>") );
 	objGlobal.ok = isOk;
 
 	scriptsOut = fixture.append( scriptsIn ).find("script");
@@ -2348,7 +2348,7 @@ test( "script evaluation (#11795)", function() {
 
 	if ( jQuery.ajax ) {
 		Globals.register("testBar");
-		jQuery("#qunit-fixture").append( "<script src='" + url("data/testbar.php") + "'/>" );
+		jQuery("#qunit-fixture").append( "<script src='" + url("data/testbar.php") + "'></script>" );
 		strictEqual( window["testBar"], "bar", "Global script evaluation" );
 	} else {
 		ok( true, "No jQuery.ajax" );
@@ -2370,7 +2370,7 @@ test( "jQuery._evalUrl (#12838)", function() {
 		equal( ( input.url || input ).slice( -1 ), expectedArgument, message );
 		expectedArgument++;
 	};
-	jQuery("#qunit-fixture").append("<script src='1'/><script src='2'/>");
+	jQuery("#qunit-fixture").append("<script src='1'></script><script src='2'></script>");
 	equal( expectedArgument, 3, "synchronous execution" );
 
 	message = "custom implementation";
@@ -2379,7 +2379,7 @@ test( "jQuery._evalUrl (#12838)", function() {
 	jQuery.ajax = function( options ) {
 		strictEqual( options, {}, "Unexpected call to jQuery.ajax" );
 	};
-	jQuery("#qunit-fixture").append("<script src='3'/><script src='4'/>");
+	jQuery("#qunit-fixture").append("<script src='3'></script><script src='4'></script>");
 
 	jQuery.ajax = ajax;
 	jQuery._evalUrl = evalUrl;
@@ -2422,7 +2422,7 @@ test( "insertAfter, insertBefore, etc do not work when destination is original e
 test( "Index for function argument should be received (#13094)", 2, function() {
 	var i = 0;
 
-	jQuery("<div/><div/>").before(function( index ) {
+	jQuery("<div></div><div></div>").before(function( index ) {
 		equal( index, i++, "Index should be correct" );
 	});
 
@@ -2435,4 +2435,76 @@ test( "Make sure jQuery.fn.remove can work on elements in documentFragment", 1, 
 	jQuery( div ).remove();
 
 	equal( fragment.childNodes.length, 0, "div element was removed from documentFragment" );
+});
+
+asyncTest( "Sanitized HTML doesn't get unsanitized", 51, function() {
+
+	var container = jQuery("<div></div>").appendTo("#qunit-fixture"),
+		executed = [],
+		inputs = [],
+		counter = 0,
+
+		// Self-closing non-void tags must be left to the HTML parser: expanding
+		// them lets text a sanitizer saw inside a raw text element (style, xmp,
+		// textarea...) break out of it as live markup with event handlers.
+		// Thanks to Masato Kinugawa from Cure53 for the original test cases.
+		templates = [
+			"<style><style/><img src=url404 onerror=xss(@)>",
+			"<xmp><xmp/><img src=url404 onerror=xss(@)>",
+			"<title><title /><img src=url404 onerror=xss(@)>",
+			"<textarea><textarea/><img src=url404 onerror=xss(@)>",
+			"<iframe><iframe/><img src=url404 onerror=xss(@)>",
+			"<noframes><noframes/><img src=url404 onerror=xss(@)>",
+			"<noembed><noembed/><img src=url404 onerror=xss(@)>",
+			"<noscript><noscript/><img src=url404 onerror=xss(@)>",
+			"<noscript/><img src=url404 onerror=xss(@)>",
+			"<img alt=\"<x\" title=\"/><img src=url404 onerror=xss(@)>\">",
+			"<img alt=\"\n<x\" title=\"/>\n<img src=url404 onerror=xss(@)>\">",
+			"<foo\" alt=\"\" title=\"/><img src=url404 onerror=xss(@)>\">",
+			"<img alt=\"<x\" title=\"\" src=\"/><img src=url404 onerror=xss(@)>\">"
+		],
+		inserters = {
+			"html()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).html( html );
+			},
+			"append()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).append( html );
+			},
+			"jQuery()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).append( jQuery( html ) );
+			},
+			"jQuery.parseHTML()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).append( jQuery.parseHTML( html ) );
+			}
+		};
+
+	Globals.register("xss");
+	window["xss"] = function( index ) {
+		executed.push( inputs[ index ] );
+	};
+
+	jQuery.each( inserters, function( name, insert ) {
+		jQuery.each( templates, function( i, template ) {
+			var html, label;
+
+			// jQuery.parseHTML parses in an inert document where scripting is
+			// disabled, so <noscript> content is markup there regardless
+			if ( name === "jQuery.parseHTML()" && /noscript/.test( template ) ) {
+				return;
+			}
+
+			html = template.replace( "@", counter );
+			label = name + " with " + html;
+			inputs[ counter++ ] = label;
+
+			equal( insert( html ).find("img[onerror]").length, 0,
+				"No element with an injected event handler was created, " + label );
+		});
+	});
+
+	// Give any injected image the time to fail loading and run its handler
+	setTimeout(function() {
+		deepEqual( executed, [], "Insecure code wasn't executed" );
+		start();
+	}, 1000 );
 });
