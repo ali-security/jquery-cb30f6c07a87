@@ -2508,3 +2508,105 @@ asyncTest( "Sanitized HTML doesn't get unsanitized", 51, function() {
 		start();
 	}, 1000 );
 });
+
+test( "<option> and <optgroup> HTML is parsed like innerHTML, without a <select> wrapper (CVE-2020-11023)", function() {
+
+	// A sanitizer validates HTML the way innerHTML parses it in a body
+	// context; wrapping <option>/<optgroup> strings in a <select> parses them
+	// in a different context, so the resulting DOM no longer matches what was
+	// validated (here </select> closes the wrapper and the content moves).
+	var inputs = [
+			"<option>a</option></select><b>x</b>",
+			"<optgroup label='a'><option>b</option></optgroup></select><b>x</b>",
+			"<option value='1'>One</option><option value='2' selected='selected'>Two</option>"
+		];
+
+	expect( inputs.length * 3 );
+
+	jQuery.each( inputs, function( i, html ) {
+		var reference = document.createElement("div");
+
+		// Support: IE<=9
+		// IE <=9 drops <option> tags outside of a select, so the wrapper stays there
+		if ( !jQuery.support.option ) {
+			ok( true, "IE<=9 keeps the select wrapper; skipping " + html );
+			ok( true, "IE<=9 keeps the select wrapper; skipping " + html );
+			ok( true, "IE<=9 keeps the select wrapper; skipping " + html );
+			return;
+		}
+
+		reference.innerHTML = html;
+
+		equal( jQuery("<div></div>").append( html ).html(), reference.innerHTML,
+			"append() parses " + html + " like innerHTML" );
+		equal( jQuery("<div></div>").html( html ).html(), reference.innerHTML,
+			"html() parses " + html + " like innerHTML" );
+		equal( jQuery( html ).length, reference.childNodes.length,
+			"jQuery() keeps every top-level node of " + html );
+	});
+});
+
+asyncTest( "Sanitized HTML with <option> or <optgroup> doesn't get unsanitized (CVE-2020-11023)", 13, function() {
+
+	var container = jQuery("<div></div>").appendTo("#qunit-fixture"),
+		executed = [],
+		inputs = [],
+		counter = 0,
+
+		// A sanitizer parses these in a body context, where the raw text element
+		// keeps everything after it as text. Parsed inside a <select> wrapper, the
+		// raw text start tag is dropped, so </select> closes the wrapper and the
+		// <img> turns into live markup with an event handler.
+		// Thanks to Masato Kinugawa from Cure53 for the original test case.
+		templates = [
+			"<option><style></option></select><img src=url404 onerror=xss(@)></style>",
+			"<optgroup><style></optgroup></select><img src=url404 onerror=xss(@)></style>",
+			"<option><xmp></option></select><img src=url404 onerror=xss(@)></xmp>",
+			"<option><noembed></option></select><img src=url404 onerror=xss(@)></noembed>"
+		],
+		inserters = {
+			"html()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).html( html );
+			},
+			"append()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).append( html );
+			},
+			"jQuery()": function( html ) {
+				return jQuery("<div></div>").appendTo( container ).append( jQuery( html ) );
+			}
+		};
+
+	Globals.register("xss");
+	window["xss"] = function( index ) {
+		executed.push( inputs[ index ] );
+	};
+
+	jQuery.each( inserters, function( name, insert ) {
+		jQuery.each( templates, function( i, template ) {
+			var html = template.replace( "@", counter ),
+				label = name + " with " + html,
+				sanitized = document.createElement("div");
+
+			inputs[ counter++ ] = label;
+
+			// Support: IE<=9
+			// IE <=9 drops <option> tags outside of a select, so the wrapper stays there
+			if ( !jQuery.support.option ) {
+				ok( true, "IE<=9 keeps the select wrapper; skipping " + label );
+				return;
+			}
+
+			// What a sanitizer validated: the payload stays inert text
+			sanitized.innerHTML = html;
+
+			equal( insert( html ).html(), sanitized.innerHTML,
+				"Parsed the same DOM a sanitizer validated, " + label );
+		});
+	});
+
+	// Give any injected image the time to fail loading and run its handler
+	setTimeout(function() {
+		deepEqual( executed, [], "Insecure code wasn't executed" );
+		start();
+	}, 1000 );
+});
