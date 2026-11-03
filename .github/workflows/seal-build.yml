@@ -1,0 +1,119 @@
+name: seal-build
+
+# Build + pack only. The project's tests (grunt default + the QUnit suite in
+# headless Chrome) run on Travis, see .travis.yml.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write container scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/seal"
+          cat > "$RUNNER_TEMP/seal/build.sh" <<'SEAL_BUILD_EOF'
+          set -euo pipefail
+          # build/tasks/build.js appends $COMMIT to the embedded version string
+          unset COMMIT
+          npm config set registry https://time-machines-npm.sealsecurity.io/
+          npm config set //time-machines-npm.sealsecurity.io/:_authToken 2014-05-01T18:05:32.863000Z
+          # npm 2 only sends the token when always-auth is on
+          npm config set always-auth true
+          node --version
+          npm --version
+          # Reproducibility: pin the @DATE stamp to the 1.11.1 release build.
+          sed -i 's|( new Date() )\.toISOString()\.replace( /:[^/]*/, "Z" )|"2014-05-01T17:42Z"|' build/tasks/build.js
+          grep -n '"2014-05-01T17:42Z"' build/tasks/build.js
+          if grep -n "new Date()" build/tasks/build.js; then
+            echo "build/tasks/build.js @DATE pin did not apply"
+            exit 1
+          fi
+          # The uglify banner year is pinned to 2014 in Gruntfile.js.
+          if grep -n "grunt.template.today" Gruntfile.js; then
+            echo "Gruntfile.js still uses grunt.template.today"
+            exit 1
+          fi
+          npm install
+          # grunt default task == upstream `npm test`
+          ./node_modules/.bin/grunt
+          node /seal/make-cdn-copies.js
+          ls -la dist dist/cdn
+          rm -rf node_modules .github
+          rm -f .sizecache.json
+          # npm 2 keeps each file's uid/gid in the tar entries
+          chown -R "$HOST_UID:$HOST_GID" /work
+          npm pack
+          mkdir -p /work/seal-out
+          mv jquery-1.11.1.tgz /work/seal-out/
+          tar tzf /work/seal-out/jquery-1.11.1.tgz | sort
+          echo "member count: $(tar tzf /work/seal-out/jquery-1.11.1.tgz | wc -l)"
+          chown -R "$HOST_UID:$HOST_GID" /work
+          SEAL_BUILD_EOF
+          cat > "$RUNNER_TEMP/seal/make-cdn-copies.js" <<'SEAL_CDN_EOF'
+          // dist/cdn/* exactly as makeReleaseCopies() in build/release.js
+          // (reachable upstream only via the interactive `grunt release`).
+          var fs = require( "fs" ),
+            version = require( process.cwd() + "/package.json" ).version,
+            cdnFolder = "dist/cdn",
+            releaseFiles = {
+              "jquery-VER.js": "dist/jquery.js",
+              "jquery-VER.min.js": "dist/jquery.min.js",
+              "jquery-VER.min.map": "dist/jquery.min.map",
+              "jquery.js": "dist/jquery.js",
+              "jquery.min.js": "dist/jquery.min.js",
+              "jquery.min.map": "dist/jquery.min.map",
+              "jquery-latest.js": "dist/jquery.js",
+              "jquery-latest.min.js": "dist/jquery.min.js",
+              "jquery-latest.min.map": "dist/jquery.min.map"
+            };
+          if ( !fs.existsSync( cdnFolder ) ) {
+            fs.mkdirSync( cdnFolder );
+          }
+          Object.keys( releaseFiles ).forEach(function( key ) {
+            var text,
+              builtFile = releaseFiles[ key ],
+              unpathedFile = key.replace( /VER/g, version ),
+              releaseFile = cdnFolder + "/" + unpathedFile;
+            if ( /\.map$/.test( releaseFile ) ) {
+              text = fs.readFileSync( builtFile, "utf8" )
+                .replace( /"file":"([^"]+)","sources":\["([^"]+)"\]/,
+                  "\"file\":\"" + unpathedFile.replace( /\.min\.map/, ".min.js" ) +
+                  "\",\"sources\":[\"" + unpathedFile.replace( /\.min\.map/, ".js" ) + "\"]" );
+              fs.writeFileSync( releaseFile, text );
+            } else if ( /\.min\.js$/.test( releaseFile ) ) {
+              text = fs.readFileSync( builtFile, "utf8" )
+                .replace( /\/\/# sourceMappingURL=\S+/, "" );
+              fs.writeFileSync( releaseFile, text );
+            } else {
+              fs.writeFileSync( releaseFile, fs.readFileSync( builtFile ) );
+            }
+            console.log( releaseFile );
+          });
+          SEAL_CDN_EOF
+          chmod +x "$RUNNER_TEMP/seal/build.sh"
+
+      - name: Build and pack (node 0.10 / npm 2, grunt)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -v "$RUNNER_TEMP/seal:/seal" \
+            -w /work \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            node:0.10-wheezy bash /seal/build.sh
+          test -f seal-out/jquery-1.11.1.tgz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jquery-1.11.1
+          path: seal-out/jquery-1.11.1.tgz
+          if-no-files-found: error
